@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Search, TrendingUp, TrendingDown, Minus, Home, MapPin, Bed } from "lucide-react";
@@ -12,61 +11,48 @@ import { useToast } from "@/hooks/use-toast";
 const PropertyTracker = () => {
   const [selectedProperty, setSelectedProperty] = useState("");
   const [bedrooms, setBedrooms] = useState("");
-  const [webhookUrl, setWebhookUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState(null);
   const { toast } = useToast();
 
-  // Predefined property list
+  // Fixed webhook URL (hidden from user)
+  const webhookUrl = "http://localhost:5678/webhook-test/input";
+
+  // Limited predefined properties
   const predefinedProperties = [
-    "Luxury Downtown Apartments",
-    "Riverside Condominiums", 
-    "Garden View Townhouses",
-    "Metropolitan Heights",
-    "Sunset Villa Complex",
-    "Oceanfront Residences",
-    "City Center Lofts",
-    "Hillside Manor",
-    "Parkside Estates",
-    "Waterfront Towers",
-    "Green Valley Homes",
-    "Executive Suites",
-    "Penthouse Collection",
-    "Suburban Retreat",
-    "Urban Living Complex"
+    "Changi Court",
+    "Changi Green"
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedProperty || !bedrooms || !webhookUrl) {
+    if (!selectedProperty || !bedrooms) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all fields including the n8n webhook URL",
+        description: "Please fill in all fields",
         variant: "destructive",
       });
       return;
     }
 
     setIsLoading(true);
-    console.log("Sending data to n8n webhook:", { selectedProperty, bedrooms, webhookUrl });
+    
+    // Format data as plain text: "property_name X bedrooms"
+    const plainTextData = `${selectedProperty} ${bedrooms} bedrooms`;
+    console.log("Sending plain text data to n8n webhook:", plainTextData);
 
     try {
       const response = await fetch(webhookUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "text/plain",
         },
-        body: JSON.stringify({
-          propertyName: selectedProperty,
-          bedrooms: parseInt(bedrooms),
-          timestamp: new Date().toISOString(),
-          requestSource: "Competitor Price Tracker"
-        }),
+        body: plainTextData,
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.text();
         console.log("Response from n8n:", data);
         
         // Simulate AI-powered competitor analysis results
@@ -92,7 +78,7 @@ const PropertyTracker = () => {
             "Location premium applies for waterfront views",
             "Market shows strong demand for this property type"
           ],
-          ...data
+          rawResponse: data
         };
         
         setResults(mockResults);
@@ -107,7 +93,7 @@ const PropertyTracker = () => {
       console.error("Error calling n8n webhook:", error);
       toast({
         title: "Connection Error",
-        description: "Failed to connect to n8n webhook. Please check your URL and try again.",
+        description: "Failed to connect to n8n webhook. Please check your connection and try again.",
         variant: "destructive",
       });
     } finally {
@@ -154,7 +140,7 @@ const PropertyTracker = () => {
                   </Label>
                   <Select value={selectedProperty} onValueChange={setSelectedProperty}>
                     <SelectTrigger className="w-full h-12 border-2 border-gray-200 focus:border-blue-500 transition-colors">
-                      <SelectValue placeholder="Choose from predefined properties..." />
+                      <SelectValue placeholder="Choose from available properties..." />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 bg-white border border-gray-200 shadow-lg">
                       {predefinedProperties.map((property) => (
@@ -186,23 +172,6 @@ const PropertyTracker = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="webhook" className="text-sm font-medium text-gray-700">
-                    n8n Webhook URL
-                  </Label>
-                  <Input
-                    id="webhook"
-                    type="url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    placeholder="https://your-n8n-instance.com/webhook/..."
-                    className="h-12 border-2 border-gray-200 focus:border-blue-500 transition-colors"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Enter your n8n webhook URL to receive and process the analysis data
-                  </p>
                 </div>
 
                 <Button
