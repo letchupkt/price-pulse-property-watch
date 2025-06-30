@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, TrendingUp, TrendingDown, Minus, Home, MapPin, Bed } from "lucide-react";
+import { Loader2, Search, FileText, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const PropertyTracker = () => {
@@ -55,37 +55,31 @@ const PropertyTracker = () => {
         const data = await response.text();
         console.log("Response from n8n:", data);
         
-        // Simulate AI-powered competitor analysis results
-        const mockResults = {
-          propertyName: selectedProperty,
-          bedrooms: parseInt(bedrooms),
-          averagePrice: Math.round(Math.random() * 500000 + 300000),
-          competitorCount: Math.floor(Math.random() * 15) + 5,
-          priceRange: {
-            min: Math.round(Math.random() * 200000 + 250000),
-            max: Math.round(Math.random() * 300000 + 600000)
-          },
-          marketTrend: Math.random() > 0.5 ? "up" : "down",
-          trendPercentage: Math.round(Math.random() * 15) + 1,
-          topCompetitors: [
-            { name: "Premium Properties Ltd", price: Math.round(Math.random() * 100000 + 400000) },
-            { name: "Elite Real Estate", price: Math.round(Math.random() * 100000 + 350000) },
-            { name: "Prime Locations Inc", price: Math.round(Math.random() * 100000 + 380000) }
-          ],
-          insights: [
-            "Your pricing is competitive within the market range",
-            "Consider adjusting rates during peak season",
-            "Location premium applies for waterfront views",
-            "Market shows strong demand for this property type"
-          ],
-          rawResponse: data
-        };
-        
-        setResults(mockResults);
-        toast({
-          title: "Analysis Complete!",
-          description: "AI-powered competitor analysis has been generated successfully.",
-        });
+        // Check if we have actual data
+        if (data && data.trim() !== "" && !data.includes("Data not exists")) {
+          setResults({
+            propertyName: selectedProperty,
+            bedrooms: parseInt(bedrooms),
+            rawResponse: data,
+            hasData: true
+          });
+          toast({
+            title: "Analysis Complete!",
+            description: "Property analysis has been retrieved successfully.",
+          });
+        } else {
+          setResults({
+            propertyName: selectedProperty,
+            bedrooms: parseInt(bedrooms),
+            rawResponse: data || "No data available for this property configuration.",
+            hasData: false
+          });
+          toast({
+            title: "No Data Found",
+            description: "No analysis data exists for the selected property configuration.",
+            variant: "destructive",
+          });
+        }
       } else {
         throw new Error("Failed to get response from webhook");
       }
@@ -101,13 +95,51 @@ const PropertyTracker = () => {
     }
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
+  const formatMarkdownContent = (content: string) => {
+    // Split content into sections and format for better display
+    const sections = content.split('---').filter(section => section.trim() !== '');
+    
+    return sections.map((section, index) => {
+      const lines = section.split('\n').filter(line => line.trim() !== '');
+      
+      return (
+        <div key={index} className="mb-6 p-4 bg-gray-50 rounded-lg">
+          {lines.map((line, lineIndex) => {
+            const trimmedLine = line.trim();
+            
+            // Handle headers
+            if (trimmedLine.startsWith('####')) {
+              return <h4 key={lineIndex} className="text-lg font-semibold text-blue-700 mb-2">{trimmedLine.replace('####', '').trim()}</h4>;
+            }
+            if (trimmedLine.startsWith('###')) {
+              return <h3 key={lineIndex} className="text-xl font-bold text-blue-800 mb-3">{trimmedLine.replace('###', '').trim()}</h3>;
+            }
+            
+            // Handle bold text
+            if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+              return <p key={lineIndex} className="font-semibold text-gray-800 mb-2">{trimmedLine.replace(/\*\*/g, '')}</p>;
+            }
+            
+            // Handle bullet points
+            if (trimmedLine.startsWith('- ')) {
+              return <li key={lineIndex} className="ml-4 text-gray-700 mb-1 list-disc">{trimmedLine.replace('- ', '')}</li>;
+            }
+            
+            // Handle numbered lists
+            if (/^\d+\./.test(trimmedLine)) {
+              return <p key={lineIndex} className="font-medium text-gray-800 mb-2">{trimmedLine}</p>;
+            }
+            
+            // Regular paragraphs
+            if (trimmedLine.length > 0) {
+              return <p key={lineIndex} className="text-gray-700 mb-2 leading-relaxed">{trimmedLine}</p>;
+            }
+            
+            return null;
+          })}
+        </div>
+      );
+    });
   };
 
   return (
@@ -134,9 +166,8 @@ const PropertyTracker = () => {
             <CardContent className="p-6 space-y-6">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="property" className="text-sm font-medium text-gray-700 flex items-center space-x-2">
-                    <Home className="h-4 w-4" />
-                    <span>Select Property</span>
+                  <Label htmlFor="property" className="text-sm font-medium text-gray-700">
+                    Select Property
                   </Label>
                   <Select value={selectedProperty} onValueChange={setSelectedProperty}>
                     <SelectTrigger className="w-full h-12 border-2 border-gray-200 focus:border-blue-500 transition-colors">
@@ -145,10 +176,7 @@ const PropertyTracker = () => {
                     <SelectContent className="max-h-60 bg-white border border-gray-200 shadow-lg">
                       {predefinedProperties.map((property) => (
                         <SelectItem key={property} value={property} className="hover:bg-blue-50">
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-4 w-4 text-gray-400" />
-                            <span>{property}</span>
-                          </div>
+                          {property}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -156,9 +184,8 @@ const PropertyTracker = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="bedrooms" className="text-sm font-medium text-gray-700 flex items-center space-x-2">
-                    <Bed className="h-4 w-4" />
-                    <span>Number of Bedrooms</span>
+                  <Label htmlFor="bedrooms" className="text-sm font-medium text-gray-700">
+                    Number of Bedrooms
                   </Label>
                   <Select value={bedrooms} onValueChange={setBedrooms}>
                     <SelectTrigger className="w-full h-12 border-2 border-gray-200 focus:border-blue-500 transition-colors">
@@ -182,12 +209,12 @@ const PropertyTracker = () => {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Analyzing Competitors...
+                      Analyzing Property...
                     </>
                   ) : (
                     <>
                       <Search className="mr-2 h-4 w-4" />
-                      Start AI Analysis
+                      Start Analysis
                     </>
                   )}
                 </Button>
@@ -198,97 +225,45 @@ const PropertyTracker = () => {
           {/* Results Display */}
           <div className="space-y-6">
             {results ? (
-              <>
-                <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
-                  <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50 rounded-t-lg">
-                    <CardTitle className="flex items-center justify-between">
-                      <span>Analysis Results</span>
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">
-                        AI Powered
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="text-center p-4 bg-blue-50 rounded-lg">
-                        <p className="text-sm text-gray-600">Average Price</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                          {formatPrice(results.averagePrice)}
-                        </p>
-                      </div>
-                      <div className="text-center p-4 bg-purple-50 rounded-lg">
-                        <p className="text-sm text-gray-600">Competitors Found</p>
-                        <p className="text-2xl font-bold text-purple-600">
-                          {results.competitorCount}
-                        </p>
-                      </div>
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50 rounded-t-lg">
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Analysis Results</span>
+                    <Badge variant={results.hasData ? "default" : "destructive"} className={results.hasData ? "bg-green-100 text-green-700" : ""}>
+                      {results.hasData ? (
+                        <>
+                          <FileText className="h-4 w-4 mr-1" />
+                          Data Available
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="h-4 w-4 mr-1" />
+                          No Data
+                        </>
+                      )}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-gray-600">
+                      <strong>Property:</strong> {results.propertyName} ({results.bedrooms} {results.bedrooms === 1 ? 'bedroom' : 'bedrooms'})
+                    </p>
+                  </div>
+                  
+                  {results.hasData ? (
+                    <div className="prose prose-sm max-w-none">
+                      {formatMarkdownContent(results.rawResponse)}
                     </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">Market Trend</p>
-                          <p className="text-sm text-gray-600">
-                            {results.trendPercentage}% {results.marketTrend === 'up' ? 'increase' : 'decrease'} this month
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {results.marketTrend === 'up' ? (
-                            <TrendingUp className="h-6 w-6 text-green-500" />
-                          ) : (
-                            <TrendingDown className="h-6 w-6 text-red-500" />
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-yellow-50 rounded-lg">
-                        <p className="font-medium text-gray-900 mb-2">Price Range</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600">
-                            Min: {formatPrice(results.priceRange.min)}
-                          </span>
-                          <Minus className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-600">
-                            Max: {formatPrice(results.priceRange.max)}
-                          </span>
-                        </div>
-                      </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 mb-2">No analysis data available</p>
+                      <p className="text-sm text-gray-500">{results.rawResponse}</p>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle>Top Competitors</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="space-y-3">
-                      {results.topCompetitors.map((competitor, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="font-medium text-gray-900">{competitor.name}</span>
-                          <span className="font-bold text-blue-600">{formatPrice(competitor.price)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle>AI Insights</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="space-y-3">
-                      {results.insights.map((insight, index) => (
-                        <div key={index} className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                          <p className="text-sm text-gray-700">{insight}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
+                  )}
+                </CardContent>
+              </Card>
             ) : (
               <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
                 <CardContent className="p-12 text-center">
@@ -299,7 +274,7 @@ const PropertyTracker = () => {
                     Ready for Analysis
                   </h3>
                   <p className="text-gray-600">
-                    Fill out the form on the left to start your AI-powered competitor price analysis
+                    Fill out the form on the left to start your property analysis
                   </p>
                 </CardContent>
               </Card>
