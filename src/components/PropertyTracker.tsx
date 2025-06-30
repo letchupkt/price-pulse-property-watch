@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,47 +94,115 @@ const PropertyTracker = () => {
     }
   };
 
-  const formatMarkdownContent = (content: string) => {
-    // Split content into sections and format for better display
-    const sections = content.split('---').filter(section => section.trim() !== '');
+  const parseAndFormatResponse = (content: string) => {
+    try {
+      // Try to parse as JSON first
+      const jsonData = JSON.parse(content);
+      if (jsonData && jsonData[0] && jsonData[0].output) {
+        return formatAnalysisContent(jsonData[0].output);
+      }
+    } catch (e) {
+      // If not JSON, treat as plain text
+      return formatAnalysisContent(content);
+    }
     
-    return sections.map((section, index) => {
+    return formatAnalysisContent(content);
+  };
+
+  const formatAnalysisContent = (content: string) => {
+    // Clean up the content by removing unwanted characters and normalizing spacing
+    let cleanContent = content
+      .replace(/\\n/g, '\n')           // Replace literal \n with actual newlines
+      .replace(/\n\s*\n\s*\n/g, '\n\n') // Normalize multiple newlines to double newlines
+      .replace(/^\s+|\s+$/g, '')       // Trim leading/trailing whitespace
+      .replace(/\t/g, '    ');         // Replace tabs with 4 spaces
+
+    const sections = cleanContent.split(/---+/).filter(section => section.trim() !== '');
+    
+    return sections.map((section, sectionIndex) => {
       const lines = section.split('\n').filter(line => line.trim() !== '');
       
       return (
-        <div key={index} className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div key={sectionIndex} className="mb-8 last:mb-0">
           {lines.map((line, lineIndex) => {
             const trimmedLine = line.trim();
             
-            // Handle headers
-            if (trimmedLine.startsWith('####')) {
-              return <h4 key={lineIndex} className="text-lg font-semibold text-blue-700 mb-2">{trimmedLine.replace('####', '').trim()}</h4>;
-            }
-            if (trimmedLine.startsWith('###')) {
-              return <h3 key={lineIndex} className="text-xl font-bold text-blue-800 mb-3">{trimmedLine.replace('###', '').trim()}</h3>;
+            // Skip empty lines
+            if (!trimmedLine) return null;
+            
+            // Handle main headers (###)
+            if (trimmedLine.startsWith('### ')) {
+              return (
+                <h2 key={lineIndex} className="text-2xl font-bold text-blue-900 mb-4 mt-6 first:mt-0 border-b-2 border-blue-200 pb-2">
+                  {trimmedLine.replace(/^###\s*/, '')}
+                </h2>
+              );
             }
             
-            // Handle bold text
-            if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
-              return <p key={lineIndex} className="font-semibold text-gray-800 mb-2">{trimmedLine.replace(/\*\*/g, '')}</p>;
+            // Handle sub headers (####)
+            if (trimmedLine.startsWith('#### ')) {
+              return (
+                <h3 key={lineIndex} className="text-xl font-semibold text-blue-800 mb-3 mt-5 first:mt-0">
+                  {trimmedLine.replace(/^####\s*/, '')}
+                </h3>
+              );
+            }
+            
+            // Handle smaller headers (#####)
+            if (trimmedLine.startsWith('##### ')) {
+              return (
+                <h4 key={lineIndex} className="text-lg font-medium text-blue-700 mb-2 mt-4 first:mt-0">
+                  {trimmedLine.replace(/^#####\s*/, '')}
+                </h4>
+              );
+            }
+            
+            // Handle bold text (**text**)
+            if (trimmedLine.match(/^\*\*.*\*\*:?\s*$/)) {
+              return (
+                <div key={lineIndex} className="font-bold text-gray-900 mb-3 mt-4 first:mt-0 bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
+                  {trimmedLine.replace(/\*\*/g, '')}
+                </div>
+              );
             }
             
             // Handle bullet points
             if (trimmedLine.startsWith('- ')) {
-              return <li key={lineIndex} className="ml-4 text-gray-700 mb-1 list-disc">{trimmedLine.replace('- ', '')}</li>;
+              return (
+                <li key={lineIndex} className="ml-6 text-gray-700 mb-2 list-disc leading-relaxed">
+                  {trimmedLine.replace(/^-\s*/, '')}
+                </li>
+              );
             }
             
             // Handle numbered lists
-            if (/^\d+\./.test(trimmedLine)) {
-              return <p key={lineIndex} className="font-medium text-gray-800 mb-2">{trimmedLine}</p>;
+            if (/^\d+\.\s/.test(trimmedLine)) {
+              return (
+                <div key={lineIndex} className="font-medium text-gray-800 mb-3 pl-4 border-l-2 border-gray-300">
+                  {trimmedLine}
+                </div>
+              );
+            }
+            
+            // Handle special formatting patterns
+            if (trimmedLine.includes(':') && trimmedLine.length < 100) {
+              const [label, ...valueParts] = trimmedLine.split(':');
+              const value = valueParts.join(':').trim();
+              
+              return (
+                <div key={lineIndex} className="mb-2 p-2 bg-blue-50 rounded border-l-4 border-blue-300">
+                  <span className="font-semibold text-blue-900">{label.trim()}:</span>
+                  <span className="text-gray-700 ml-2">{value}</span>
+                </div>
+              );
             }
             
             // Regular paragraphs
-            if (trimmedLine.length > 0) {
-              return <p key={lineIndex} className="text-gray-700 mb-2 leading-relaxed">{trimmedLine}</p>;
-            }
-            
-            return null;
+            return (
+              <p key={lineIndex} className="text-gray-700 mb-3 leading-relaxed text-justify">
+                {trimmedLine}
+              </p>
+            );
           })}
         </div>
       );
@@ -245,21 +312,23 @@ const PropertyTracker = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-gray-600">
-                      <strong>Property:</strong> {results.propertyName} ({results.bedrooms} {results.bedrooms === 1 ? 'bedroom' : 'bedrooms'})
+                  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-gray-700 font-medium">
+                      <span className="text-blue-800">Property:</span> {results.propertyName} 
+                      <span className="mx-2">•</span>
+                      <span className="text-blue-800">Bedrooms:</span> {results.bedrooms}
                     </p>
                   </div>
                   
                   {results.hasData ? (
-                    <div className="prose prose-sm max-w-none">
-                      {formatMarkdownContent(results.rawResponse)}
+                    <div className="prose prose-sm max-w-none bg-white rounded-lg p-6 shadow-inner border border-gray-100">
+                      {parseAndFormatResponse(results.rawResponse)}
                     </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 mb-2">No analysis data available</p>
-                      <p className="text-sm text-gray-500">{results.rawResponse}</p>
+                    <div className="text-center py-12">
+                      <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No Analysis Data Available</h3>
+                      <p className="text-gray-500 max-w-md mx-auto">{results.rawResponse}</p>
                     </div>
                   )}
                 </CardContent>
@@ -267,14 +336,14 @@ const PropertyTracker = () => {
             ) : (
               <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
                 <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="h-8 w-8 text-blue-600" />
+                  <div className="w-20 h-20 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Search className="h-10 w-10 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
                     Ready for Analysis
                   </h3>
-                  <p className="text-gray-600">
-                    Fill out the form on the left to start your property analysis
+                  <p className="text-gray-600 max-w-md mx-auto">
+                    Fill out the form on the left to start your comprehensive property analysis and get detailed competitor insights.
                   </p>
                 </CardContent>
               </Card>
