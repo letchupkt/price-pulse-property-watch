@@ -15,7 +15,7 @@ const PropertyTracker = () => {
   const { toast } = useToast();
 
   // Fixed webhook URL (hidden from user)
-  const webhookUrl = "http://localhost:5678/webhook-test/input";
+  const webhookUrl = "https://rajigenzi.app.n8n.cloud/webhook-test/input";
 
   // Limited predefined properties
   const predefinedProperties = [
