@@ -55,26 +55,52 @@ const PropertyChart = () => {
     return [...colors, ...additionalColors];
   };
 
+  // Generate placeholder dates if dates array is empty
+  const generatePlaceholderDates = (dataLength: number) => {
+    const dates = [];
+    const today = new Date();
+    for (let i = dataLength - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+
   // Process the JSON data and create chart data
   const processData = (data: PropertyData[]) => {
     console.log("Processing data:", data);
     
-    // Get all unique dates
-    const allDates = new Set<string>();
-    data.forEach(property => {
-      property.dates.forEach(date => allDates.add(date));
-    });
+    if (data.length === 0) {
+      setRentChartData([]);
+      setRatePsfChartData([]);
+      return;
+    }
 
-    const sortedDates = Array.from(allDates).sort();
+    // Determine dates to use - either from data or generate placeholders
+    let datesArray: string[] = [];
+    const firstProperty = data[0];
+    
+    if (firstProperty.dates && firstProperty.dates.length > 0) {
+      // Use dates from the data
+      const allDates = new Set<string>();
+      data.forEach(property => {
+        property.dates.forEach(date => allDates.add(date));
+      });
+      datesArray = Array.from(allDates).sort();
+    } else {
+      // Generate placeholder dates based on data length
+      const maxDataLength = Math.max(...data.map(p => Math.max(p.rent.length, p.rate_psf.length)));
+      datesArray = generatePlaceholderDates(maxDataLength);
+    }
 
     // Create rent chart data
-    const rentData: ChartData[] = sortedDates.map(date => {
+    const rentData: ChartData[] = datesArray.map((date, index) => {
       const dataPoint: ChartData = { date };
       
       data.forEach(property => {
-        const dateIndex = property.dates.indexOf(date);
-        if (dateIndex !== -1 && property.rent[dateIndex] !== null) {
-          dataPoint[`Property_${property.property_id}`] = property.rent[dateIndex];
+        if (property.rent[index] !== null && property.rent[index] !== undefined) {
+          dataPoint[`Property_${property.property_id}`] = property.rent[index];
         }
       });
       
@@ -82,13 +108,12 @@ const PropertyChart = () => {
     });
 
     // Create rate_psf chart data
-    const ratePsfData: ChartData[] = sortedDates.map(date => {
+    const ratePsfData: ChartData[] = datesArray.map((date, index) => {
       const dataPoint: ChartData = { date };
       
       data.forEach(property => {
-        const dateIndex = property.dates.indexOf(date);
-        if (dateIndex !== -1 && property.rate_psf[dateIndex] !== null) {
-          dataPoint[`Property_${property.property_id}`] = property.rate_psf[dateIndex];
+        if (property.rate_psf[index] !== null && property.rate_psf[index] !== undefined) {
+          dataPoint[`Property_${property.property_id}`] = property.rate_psf[index];
         }
       });
       
@@ -121,12 +146,16 @@ const PropertyChart = () => {
         // Handle different response formats
         let propertyData: PropertyData[] = [];
         
-        if (responseData.data && Array.isArray(responseData.data)) {
+        if (Array.isArray(responseData) && responseData.length > 0) {
+          if (responseData[0].data && Array.isArray(responseData[0].data)) {
+            propertyData = responseData[0].data;
+          } else if (responseData[0] && typeof responseData[0] === 'object') {
+            propertyData = responseData;
+          }
+        } else if (responseData.data && Array.isArray(responseData.data)) {
           propertyData = responseData.data;
         } else if (Array.isArray(responseData)) {
           propertyData = responseData;
-        } else {
-          throw new Error("Invalid response format");
         }
 
         if (propertyData.length > 0) {
