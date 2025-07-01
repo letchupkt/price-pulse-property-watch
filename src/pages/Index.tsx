@@ -2,6 +2,7 @@
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import PropertyTracker from "@/components/PropertyTracker";
+import PropertyChart from "@/components/PropertyChart";
 
 const Index = () => {
   return (
@@ -9,6 +10,7 @@ const Index = () => {
       <Header />
       <Hero />
       <PropertyTracker />
+      <PropertyChart />
     </div>
   );
 };
