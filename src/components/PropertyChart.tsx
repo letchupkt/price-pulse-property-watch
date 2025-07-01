@@ -30,6 +30,12 @@ const PropertyChart = () => {
   const [chartType, setChartType] = useState<"rent" | "rate" | "both">("both");
   const { toast } = useToast();
 
+  // Predefined properties matching PropertyTracker
+  const predefinedProperties = [
+    "Changi Court",
+    "Changi Green"
+  ];
+
   // Generate dynamic colors for properties
   const generateColors = (count: number) => {
     const colors = [
@@ -96,26 +102,69 @@ const PropertyChart = () => {
       let rateData = [];
 
       if (selectedProperty) {
-        // Fetch rent data
-        const { data: rentResults, error: rentError } = await supabase
-          .from('rent_data')
-          .select(`date, ${selectedProperty}`)
-          .not(selectedProperty, 'is', null)
-          .order('date', { ascending: true });
+        // Check if it's a predefined property name or URL-based property
+        if (predefinedProperties.includes(selectedProperty)) {
+          // Handle predefined properties by searching rent_track table
+          const { data: trackResults, error: trackError } = await supabase
+            .from('rent_track')
+            .select('*')
+            .eq('property_name', selectedProperty);
 
-        if (rentError) throw rentError;
+          if (trackError) throw trackError;
 
-        // Fetch rate data
-        const { data: rateResults, error: rateError } = await supabase
-          .from('rate_psf')
-          .select(`date, ${selectedProperty}`)
-          .not(selectedProperty, 'is', null)
-          .order('date', { ascending: true });
+          // Transform rent_track data to chart format
+          if (trackResults && trackResults.length > 0) {
+            const dateColumns = Object.keys(trackResults[0]).filter(key => 
+              key.match(/^\d{4}_\d{2}_\d{2}$/)
+            );
 
-        if (rateError) throw rateError;
+            const transformedData: ChartData[] = [];
+            dateColumns.forEach(dateCol => {
+              const formattedDate = dateCol.replace(/_/g, '-');
+              const dataPoint: ChartData = { date: formattedDate };
 
-        rentData = rentResults || [];
-        rateData = rateResults || [];
+              trackResults.forEach((row, index) => {
+                const propertyName = row.property_name || `Property ${index + 1}`;
+                if (row[dateCol]) {
+                  const value = parseFloat(row[dateCol]);
+                  if (!isNaN(value)) {
+                    dataPoint[`${propertyName}_rent`] = value;
+                  }
+                }
+              });
+
+              if (Object.keys(dataPoint).length > 1) {
+                transformedData.push(dataPoint);
+              }
+            });
+
+            setChartData(transformedData);
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // Handle URL-based properties from rent_data and rate_psf tables
+          // Fetch rent data
+          const { data: rentResults, error: rentError } = await supabase
+            .from('rent_data')
+            .select(`date, ${selectedProperty}`)
+            .not(selectedProperty, 'is', null)
+            .order('date', { ascending: true });
+
+          if (rentError) throw rentError;
+
+          // Fetch rate data
+          const { data: rateResults, error: rateError } = await supabase
+            .from('rate_psf')
+            .select(`date, ${selectedProperty}`)
+            .not(selectedProperty, 'is', null)
+            .order('date', { ascending: true });
+
+          if (rateError) throw rateError;
+
+          rentData = rentResults || [];
+          rateData = rateResults || [];
+        }
       } else if (bedrooms) {
         // Fetch from rent_track table based on bedrooms
         const { data: trackResults, error: trackError } = await supabase
@@ -157,7 +206,7 @@ const PropertyChart = () => {
         }
       }
 
-      // Combine rent and rate data
+      // Combine rent and rate data for URL-based properties
       const combinedData: ChartData[] = [];
       const allDates = new Set([
         ...rentData.map(item => item.date),
@@ -295,13 +344,20 @@ const PropertyChart = () => {
             <CardContent className="p-6 space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="property" className="text-sm font-medium text-gray-700">
-                  Select Property (URL-based)
+                  Select Property
                 </Label>
                 <Select value={selectedProperty} onValueChange={setSelectedProperty}>
                   <SelectTrigger className="w-full h-12 border-2 border-gray-200 focus:border-blue-500 transition-colors">
                     <SelectValue placeholder="Choose property..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 bg-white border border-gray-200 shadow-lg">
+                    {/* Predefined properties */}
+                    {predefinedProperties.map((property) => (
+                      <SelectItem key={property} value={property} className="hover:bg-blue-50">
+                        {property}
+                      </SelectItem>
+                    ))}
+                    {/* URL-based properties */}
                     {propertyColumns.map((column) => (
                       <SelectItem key={column} value={column} className="hover:bg-blue-50">
                         {column.replace('url_', 'Property ')}
