@@ -1,13 +1,14 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp } from "lucide-react";
+import { Loader2, TrendingUp, RefreshCw } from "lucide-react";
 
 interface PropertyData {
   property_id: string;
@@ -26,7 +27,11 @@ const PropertyChart = () => {
   const [ratePsfChartData, setRatePsfChartData] = useState<ChartData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chartType, setChartType] = useState<"rent" | "rate_psf" | "both">("both");
+  const [inputValue, setInputValue] = useState("");
   const { toast } = useToast();
+
+  // Webhook URL
+  const webhookUrl = "https://rajigenzi.app.n8n.cloud/webhook-test/input";
 
   // Generate dynamic colors for properties
   const generateColors = (count: number) => {
@@ -52,6 +57,8 @@ const PropertyChart = () => {
 
   // Process the JSON data and create chart data
   const processData = (data: PropertyData[]) => {
+    console.log("Processing data:", data);
+    
     // Get all unique dates
     const allDates = new Set<string>();
     data.forEach(property => {
@@ -92,50 +99,68 @@ const PropertyChart = () => {
     setRatePsfChartData(ratePsfData);
   };
 
-  // Simulate receiving data (you can replace this with your actual data fetching)
-  const fetchData = async () => {
+  // Fetch data from n8n webhook
+  const fetchData = async (input: string = "") => {
     setIsLoading(true);
     
     try {
-      // Sample data - replace this with your actual API call or data source
-      const sampleData: PropertyData[] = [
-        {
-          "property_id": "23600506",
-          "dates": ["2025-07-01", "2025-06-27", "2025-06-28", "2025-06-29", "2025-06-30"],
-          "rent": [4500, 4500, 4500, 4500, 4500],
-          "rate_psf": [4.1, 4.1, 4.1, 4.1, 4.1]
-        },
-        {
-          "property_id": "23602000",
-          "dates": ["2025-07-01", "2025-06-27", "2025-06-28", "2025-06-29", "2025-06-30"],
-          "rent": [3500, 3500, 3500, 3500, 3500],
-          "rate_psf": [4.01, 4.01, 4.01, 4.01, 4.01]
-        },
-        {
-          "property_id": "60019279",
-          "dates": ["2025-07-01", "2025-06-27", "2025-06-28", "2025-06-29", "2025-06-30"],
-          "rent": [4600, 4800, 4600, 4600, 4600],
-          "rate_psf": [3.89, 4.05, 3.89, 3.89, 3.89]
-        }
-      ];
-
-      processData(sampleData);
+      console.log("Sending request to n8n webhook:", { input });
       
-      toast({
-        title: "Success",
-        description: "Chart data loaded successfully",
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: input.trim() }),
       });
+
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log("Response from n8n:", responseData);
+        
+        // Handle different response formats
+        let propertyData: PropertyData[] = [];
+        
+        if (responseData.data && Array.isArray(responseData.data)) {
+          propertyData = responseData.data;
+        } else if (Array.isArray(responseData)) {
+          propertyData = responseData;
+        } else {
+          throw new Error("Invalid response format");
+        }
+
+        if (propertyData.length > 0) {
+          processData(propertyData);
+          toast({
+            title: "Success",
+            description: `Chart data loaded successfully with ${propertyData.length} properties`,
+          });
+        } else {
+          toast({
+            title: "No Data",
+            description: "No property data found in the response",
+            variant: "destructive",
+          });
+        }
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
     } catch (error) {
-      console.error('Error processing data:', error);
+      console.error('Error fetching data from n8n webhook:', error);
       toast({
         title: "Error",
-        description: "Failed to process chart data",
+        description: "Failed to fetch data from webhook. Please check the connection.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Auto-fetch data on component mount
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   // Get chart lines for rent data
   const getRentChartLines = () => {
@@ -198,7 +223,7 @@ const PropertyChart = () => {
             Property Data Visualization
           </h2>
           <p className="text-lg text-gray-600">
-            View rent and rate per sqft trends over time
+            Real-time rent and rate per sqft trends from n8n webhook
           </p>
         </div>
 
@@ -212,6 +237,19 @@ const PropertyChart = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="inputValue" className="text-sm font-medium text-gray-700">
+                  Input (Optional)
+                </Label>
+                <Input
+                  id="inputValue"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="Enter optional input parameter..."
+                  className="w-full h-12 border-2 border-gray-200 focus:border-blue-500 transition-colors"
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="chartType" className="text-sm font-medium text-gray-700">
                   Chart Type
@@ -228,23 +266,34 @@ const PropertyChart = () => {
                 </Select>
               </div>
 
-              <Button
-                onClick={fetchData}
-                disabled={isLoading}
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading Chart...
-                  </>
-                ) : (
-                  <>
-                    <TrendingUp className="mr-2 h-4 w-4" />
-                    Load Sample Data
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-4">
+                <Button
+                  onClick={() => fetchData(inputValue)}
+                  disabled={isLoading}
+                  className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="mr-2 h-4 w-4" />
+                      Fetch Data
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  onClick={() => fetchData()}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="h-12 px-6 border-2 border-gray-200 hover:border-blue-500 transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -282,7 +331,7 @@ const PropertyChart = () => {
                         No Rent Data
                       </h3>
                       <p className="text-gray-500">
-                        Click "Load Sample Data" to view rent trends
+                        Click "Fetch Data" to load rent trends from webhook
                       </p>
                     </div>
                   </div>
@@ -325,7 +374,7 @@ const PropertyChart = () => {
                         No Rate per Sqft Data
                       </h3>
                       <p className="text-gray-500">
-                        Click "Load Sample Data" to view rate per sqft trends
+                        Click "Fetch Data" to load rate per sqft trends from webhook
                       </p>
                     </div>
                   </div>
